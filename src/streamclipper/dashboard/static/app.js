@@ -503,6 +503,7 @@ const ROUTES = {
   project: (r, id) => pageProject(r, id),
   edit: (r, job, key) => pageEdit(r, job, key),
   live: (r) => pageLive(r),
+  manual: (r) => pageManual(r),
   styles: (r) => pageStyles(r),
   settings: (r) => pageSettings(r),
 };
@@ -549,6 +550,63 @@ async function route() {
   } catch (e) {
     root.replaceChildren(errorBox(e));
   }
+}
+
+
+async function pageManual(root) {
+  const source = h("input", { type: "url", placeholder: "Paste a VOD URL (YouTube, Twitch, etc.)", autocomplete: "url" });
+  const file = h("input", { type: "file", accept: "video/*" });
+  const start = h("input", { type: "number", min: "0", step: "0.1", value: "0" });
+  const end = h("input", { type: "number", min: "0.1", step: "0.1", value: "30" });
+  const submit = h("button", { class: "btn primary", type: "button" }, icon("scissors", 16), "Create clip");
+  const progress = h("div", { class: "stack" });
+  const result = h("div", { class: "stack" });
+  const form = h("section", { class: "panel stack" },
+    h("div", { class: "page-head" }, h("div", {}, h("h1", { text: "Manual Clip" }), h("p", { class: "muted", text: "Select an exact time range from a VOD and export it as an MP4." }))),
+    field("VOD link", source, "Paste a supported video URL, or choose a local video below."),
+    field("Or upload a video", file, "Large files are uploaded to your local StreamClipper workspace."),
+    h("div", { class: "grid3" }, field("Start (seconds)", start), field("End (seconds)", end)),
+    h("div", { class: "row" }, submit),
+    progress, result
+  );
+  root.replaceChildren(form);
+  submit.addEventListener("click", async () => {
+    submit.disabled = true; progress.replaceChildren(h("p", { class: "muted", text: "Preparing your clip..." })); result.replaceChildren();
+    try {
+      let body = { start: Number(start.value), end: Number(end.value) };
+      if (file.files && file.files[0]) {
+        const uploaded = await upload(file.files[0], (p) => { progress.replaceChildren(h("p", { class: "muted", text: "Uploading video: " + Math.round(p * 100) + "%" })); });
+        body.upload = uploaded.upload;
+      } else {
+        body.source = source.value.trim();
+      }
+      const job = await api("POST", "/api/manual-clip", body);
+      progress.replaceChildren(h("p", { class: "muted", text: "Clip queued. StreamClipper is processing the selected range..." }),
+        h("a", { class: "btn ghost", href: "#/project/" + enc(job.id) }, "View job"));
+      const poll = async () => {
+        try {
+          const state = await api("GET", "/api/jobs/" + enc(job.id));
+          if (state.status === "done") {
+            result.replaceChildren(h("div", { class: "row" },
+              h("span", { class: "chip ok-chip", text: "Clip ready" }),
+              h("a", { class: "btn primary", href: "/files/" + enc(job.id) + "/out/manual_clip.mp4?download=1" }, icon("download", 16), "Download MP4"),
+              h("a", { class: "btn ghost", href: "/files/" + enc(job.id) + "/out/manual_clip.mp4", target: "_blank", rel: "noopener" }, "Preview")
+            ));
+            return true;
+          }
+          if (["failed", "cancelled", "interrupted"].includes(state.status)) {
+            result.replaceChildren(errorBox(new Error(state.log_tail || "Manual clip job " + state.status)));
+            return true;
+          }
+        } catch (e) { result.replaceChildren(errorBox(e)); return true; }
+        return false;
+      };
+      const tick = async () => { if (await poll()) clearInterval(timer); };
+      const timer = setInterval(tick, 1500); timers.push(timer); tick();
+    } catch (e) {
+      progress.replaceChildren(errorBox(e));
+    } finally { submit.disabled = false; }
+  });
 }
 
 // ---- style picker (sprites of styles_gallery.jpg) -----------------------------------------------------------
