@@ -580,6 +580,8 @@ class Handler(BaseHTTPRequestHandler):
         api = segs[1:]
         if api == ["jobs"]:
             return self._send_json(201, self._new_job(body))
+        if api == ["manual-clip"]:
+            return self._send_json(201, self._new_manual_clip(body))
         if len(api) == 3 and api[0] == "jobs":
             job_id = check_job_id(api[1])
             job = srv.store.get(job_id)
@@ -856,6 +858,22 @@ class Handler(BaseHTTPRequestHandler):
         if not p.is_file():
             raise ToolError("Video file not found.", "check the path")
         return str(p)
+
+    def _new_manual_clip(self, body: dict) -> dict:
+        srv = self.server
+        source = self._resolve_source(body)
+        from streamclipper.manual import validate_window
+        start, end = validate_window(body.get("start"), body.get("end"))
+        job_id = new_job_id()
+        while job_id in srv.store.jobs:
+            job_id = new_job_id()
+        out = srv.store.job_dir(job_id) / "out" / "manual_clip.mp4"
+        argv = ["manual-clip", "--source", source, "--start", f"{start:g}", "--end", f"{end:g}", "--out", str(out)]
+        label = (Path(source).name if not re.match(r"^https?://", source, re.I) else source)
+        job = srv.store.create("manual", f"Manual clip · {label}"[:200], argv,
+                               {"start": start, "end": end, "source": source}, job_id=job_id)
+        srv.runner.submit(job_id)
+        return self._public_job(srv.store.get(job["id"]))
 
     def _new_job(self, body: dict) -> dict:
         srv = self.server
