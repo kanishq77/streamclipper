@@ -525,6 +525,18 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json(200, {"jobs": self._jobs()})
         if len(api) == 2 and api[0] == "jobs":
             return self._send_json(200, self._job_detail(api[1]))
+        if len(api) == 4 and api[0] == "jobs" and api[2] == "captures":
+            job_id = check_job_id(api[1])
+            rid = api[3]
+            if not re.fullmatch(r"[0-9a-f]{8,32}", rid):
+                raise HttpError(404, "Unknown capture.")
+            srv.store.get(job_id)
+            p = srv.store.job_dir(job_id) / "out" / "capture_requests" / f"{rid}.json"
+            try:
+                capture = json.loads(p.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                raise HttpError(404, "Unknown capture.") from None
+            return self._send_json(200, capture)
         if len(api) == 3 and api[0] == "jobs" and api[2] == "clips":
             statuses = {j["id"]: j["status"] for j in srv.store.list()}
             job = srv.store.get(check_job_id(api[1]))
@@ -584,6 +596,17 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json(201, self._new_manual_clip(body))
         if len(api) == 3 and api[0] == "jobs":
             job_id = check_job_id(api[1])
+            if api[2] == "capture":
+                job = srv.store.get(job_id)
+                if job.get("kind") != "live" or job.get("status") != "running":
+                    raise ToolError("Manual live capture requires an active live job.", "start a live session first")
+                from streamclipper.manual import validate_window
+                start, end = validate_window(body.get("start"), body.get("end"), max_duration=600.0)
+                rid = secrets.token_hex(6)
+                req_dir = srv.store.job_dir(job_id) / "out" / "capture_requests"
+                req_dir.mkdir(parents=True, exist_ok=True)
+                write_json_atomic(req_dir / f"{rid}.json", {"id": rid, "start": start, "end": end, "status": "queued"})
+                return self._send_json(202, {"id": rid, "job": job_id, "status": "queued"})
             job = srv.store.get(job_id)
             action = api[2]
             if action == "cancel":
