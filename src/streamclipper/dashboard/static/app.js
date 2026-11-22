@@ -1905,6 +1905,38 @@ async function pageLive(root) {
           { class: "card stack live-card", id: "live-active" },
           h("div", { class: "row" }, h("span", { class: "live-dot", "aria-hidden": "true" }), h("h2", { class: "ellipsis grow", text: active.label, style: { margin: 0 } }), pill(active.status), ...jobActions(active, refresh), h("a", { class: "btn sm", href: `#/project/${enc(active.id)}` }, "Open")),
           progressBlock(active),
+          h("div", { class: "card stack" },
+            h("h3", { text: "Manual live capture" }),
+            h("p", { class: "hint", text: "Capture a time range already buffered by this live session. Times are seconds since capture began; end must already be buffered." }),
+            h("div", { class: "grid3" },
+              field("Start (seconds)", h("input", { type: "number", min: "0", step: "0.1", value: "0", id: "live-cap-start" })),
+              field("End (seconds)", h("input", { type: "number", min: "0.1", step: "0.1", value: "30", id: "live-cap-end" }))
+            ),
+            h("button", { class: "btn ghost", type: "button", onclick: async (ev) => {
+              const btn = ev.currentTarget; btn.disabled = true;
+              try {
+                const req = await api("POST", "/api/jobs/" + enc(active.id) + "/capture", {
+                  start: Number(root.querySelector("#live-cap-start").value),
+                  end: Number(root.querySelector("#live-cap-end").value)
+                });
+                const status = h("p", { class: "hint", text: "Capture queued..." });
+                btn.after(status);
+                const poll = async () => {
+                  const st = await api("GET", "/api/jobs/" + enc(active.id) + "/captures/" + enc(req.id));
+                  if (st.status === "done") {
+                    status.replaceWith(h("a", { class: "btn primary", href: "/files/" + enc(active.id) + "/out/" + enc(st.output) + "?download=1" }, icon("download", 16), "Download manual live clip"));
+                    return true;
+                  }
+                  if (st.status === "failed") { status.textContent = st.error || "Capture failed"; return true; }
+                  status.textContent = "Capture " + st.status + "... waiting for selected range to be available.";
+                  return false;
+                };
+                const timer = setInterval(async () => { try { if (await poll()) clearInterval(timer); } catch (e) { clearInterval(timer); status.textContent = e.message; } }, 1200);
+                timers.push(timer);
+              } catch (e) { fail(e); }
+              finally { btn.disabled = false; }
+            } }, icon("scissors", 16), "Capture buffered range")
+          ),
           clips.length ? h("div", { class: "clips" }, clips.map((c) => clipCard(active, c, LAN, refresh))) : h("p", { class: "hint", text: "No clip yet. A moment needs to pass the minimum score first." })
         )
       );
