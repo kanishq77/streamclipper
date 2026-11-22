@@ -17,7 +17,6 @@ from streamclipper.live.ingest import Ingest, channel_name, resolve_source
 from streamclipper.live.ring import Ring
 from streamclipper.live.worker import Worker
 from streamclipper.manual import trim_video, validate_window
-from streamclipper.state import write_json_atomic
 from streamclipper.options import OPT_CHOICES, resolve_options
 from streamclipper.state import write_json_atomic
 from streamclipper.util import ToolError, fwd, isolate_children, require_tool
