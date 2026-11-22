@@ -2,6 +2,7 @@ import math
 
 import pytest
 
+from streamclipper.util import ToolError
 from streamclipper.manual import validate_window
 
 
@@ -28,7 +29,7 @@ def test_validate_window_normalizes_valid_ranges(start, end, expected):
     ],
 )
 def test_validate_window_rejects_invalid_ranges(start, end):
-    with pytest.raises(Exception):
+    with pytest.raises(ToolError):
         validate_window(start, end)
 
 
