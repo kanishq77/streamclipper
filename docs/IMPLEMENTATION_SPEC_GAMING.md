@@ -41,3 +41,18 @@ The target is vertical 9:16 output with the streamer in the upper panel and game
 - Large video-language models and continuous frame-by-frame LLM inference.
 - A broad CI/regression-hardening phase as a standalone feature.
 - A separate live recorder.
+
+## Current branch implementation status
+
+Implemented in this branch:
+- `streamclipper manual-clip` CLI command.
+- Dashboard Manual Clip page for local uploads or VOD URLs, timestamp validation, queued processing, preview and download.
+- Live-session manual capture controls that submit a request to the already-running live process.
+- The live process services requests from its existing ring buffer and trims the selected stream-time interval; no parallel recorder was introduced.
+- Streamer Split webcam-corner selection now prefers stable face detections across multiple sampled frames and falls back to the previous skin-colour heuristic.
+
+Not yet implemented in this branch:
+- The gaming event visual/action-recognition model and its integration into automatic candidate generation. Existing audio/chat/HUD candidate signals remain unchanged. This is a separate substantial model/evaluation task and is not represented as completed.
+- A labelled gaming validation corpus and quantitative precision/recall tuning.
+- Post-roll live capture and a full manual editing timeline for manually created clips.
+- Approval/review queue (explicitly deferred).
