@@ -45,6 +45,7 @@ from streamclipper.dashboard.jobs import (
 )
 from streamclipper.dashboard.shares import DAYS, ShareStore
 from streamclipper.effects import ENHANCE_MIX, ZOOM_LEVELS
+from streamclipper.state import write_json_atomic
 from streamclipper.util import VIDEO_EXTS, ToolError
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
