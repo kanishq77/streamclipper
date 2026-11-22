@@ -1107,6 +1107,7 @@ async function pageHome(root) {
   const recentSec = h("section", { class: "stack" }, h("div", { class: "sec-row" }, h("h2", { text: "Recent projects" }), h("a", { class: "btn ghost sm", href: "#/projects" }, "View all", icon("chevron-right", 14))), recent);
   root.replaceChildren(...[hero, checklistCard(), recentSec].filter(Boolean));
   let last = "";
+  let liveCaptureStart = "0", liveCaptureEnd = "30";
   const refresh = async () => {
     let jobs;
     try {
@@ -1909,8 +1910,8 @@ async function pageLive(root) {
             h("h3", { text: "Manual live capture" }),
             h("p", { class: "hint", text: "Capture a time range from this session. Times are seconds since capture began; if the end time is ahead of the live buffer, capture waits for it." }),
             h("div", { class: "grid3" },
-              field("Start (seconds)", h("input", { type: "number", min: "0", step: "0.1", value: "0", id: "live-cap-start" })),
-              field("End (seconds)", h("input", { type: "number", min: "0.1", step: "0.1", value: "30", id: "live-cap-end" }))
+              field("Start (seconds)", h("input", { type: "number", min: "0", step: "0.1", value: liveCaptureStart, id: "live-cap-start", oninput: (ev) => { liveCaptureStart = ev.target.value; } })),
+              field("End (seconds)", h("input", { type: "number", min: "0.1", step: "0.1", value: liveCaptureEnd, id: "live-cap-end", oninput: (ev) => { liveCaptureEnd = ev.target.value; } }))
             ),
             h("button", { class: "btn ghost", type: "button", onclick: async (ev) => {
               const btn = ev.currentTarget; btn.disabled = true;
