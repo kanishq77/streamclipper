@@ -428,6 +428,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_effect_flags(rn)
     _add_draft_flags(rn, render=False)
 
+    mc = sub.add_parser("manual-clip", help="Export a manually selected VOD time range")
+    mc.add_argument("--source", required=True, help="Local video path or VOD URL")
+    mc.add_argument("--start", required=True, type=float, help="Clip start in seconds")
+    mc.add_argument("--end", required=True, type=float, help="Clip end in seconds")
+    mc.add_argument("--out", required=True, help="Output MP4 path")
+
     sy = sub.add_parser("styles", help="List the caption styles, hook banner styles and caption fonts")
     sy.add_argument(
         "--preview",
@@ -490,7 +496,15 @@ def cmd_dashboard(args):
     run_dashboard(args)
 
 
+def cmd_manual_clip(args):
+    from pathlib import Path
+    from streamclipper.manual import make_manual_clip
+    out = make_manual_clip(args.source, args.start, args.end, Path(args.out))
+    print(f"MANUAL CLIP: {out}")
+
+
 COMMANDS = {
+    "manual-clip": cmd_manual_clip,
     "doctor": cmd_doctor,
     "analyze": cmd_analyze,
     "discover-clips": cmd_discover_clips,

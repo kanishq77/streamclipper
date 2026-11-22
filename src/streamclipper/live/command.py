@@ -4,6 +4,7 @@ import json
 import signal
 import statistics
 import time
+import re
 from pathlib import Path
 
 from streamclipper.audio import _mmss
@@ -15,6 +16,7 @@ from streamclipper.live.engine import Engine, LiveASR
 from streamclipper.live.ingest import Ingest, channel_name, resolve_source
 from streamclipper.live.ring import Ring
 from streamclipper.live.worker import Worker
+from streamclipper.manual import trim_video, validate_window
 from streamclipper.options import OPT_CHOICES, resolve_options
 from streamclipper.state import write_json_atomic
 from streamclipper.util import ToolError, fwd, isolate_children, require_tool
@@ -63,6 +65,7 @@ class LiveRun:
 
     def process_new(self) -> int:
         """Analyse every segment not seen yet; then emit ready moments and prune the ring."""
+        self._service_manual_captures()
         self.ring.poll()
         new = self.ring.segments[self.done_segs :]
         for seg in new:
@@ -81,6 +84,38 @@ class LiveRun:
                 if self.max_disk_gb:
                     self.check_disk()
         return len(new)
+
+
+    def _service_manual_captures(self):
+        """Service dashboard capture requests from this live process's existing ring buffer."""
+        req_dir = self.out / "capture_requests"
+        if not req_dir.is_dir():
+            return
+        for req_path in sorted(req_dir.glob("*.json")):
+            if not re.fullmatch(r"[0-9A-Za-z_-]{1,48}\.json", req_path.name):
+                continue
+            req = {}
+            try:
+                req = json.loads(req_path.read_text(encoding="utf-8"))
+                if req.get("status") not in ("queued", "running"):
+                    continue
+                start, end = validate_window(req.get("start"), req.get("end"), max_duration=600.0)
+                if end > self.ring.end:
+                    continue  # wait until the requested post-roll is actually buffered
+                req["status"] = "running"
+                write_json_atomic(req_path, req)
+                window = self.out / "windows" / f"manual_{req_path.stem}.mp4"
+                final = self.out / f"manual_live_{req_path.stem}.mp4"
+                self.ring.export_window(start, end, window)
+                first = self.ring.select(start, end)[0]
+                trim_video(window, start - first.start, end - first.start, final)
+                req.update(status="done", output=final.name)
+                write_json_atomic(req_path, req)
+                print(f"MANUAL LIVE CLIP: {final.name} ({start:.1f}-{end:.1f}s)")
+            except Exception as exc:
+                req.update(status="failed", error=f"{type(exc).__name__}: {str(exc)[:240]}")
+                write_json_atomic(req_path, req)
+                print(f"Live manual capture failed: {req.get('error')}")
 
     def emit(self, ready: list):
         for _action, clip, replaced in ready:
@@ -131,6 +166,17 @@ class LiveRun:
         if self.chat is not None:
             self.chat.stop()
         self.worker.shutdown()
+        # A requested post-roll that never arrived cannot be completed after ingest has ended.
+        req_dir = self.out / "capture_requests"
+        if req_dir.is_dir():
+            for req_path in req_dir.glob("*.json"):
+                try:
+                    req = json.loads(req_path.read_text(encoding="utf-8"))
+                    if req.get("status") == "queued" and float(req.get("end", 0)) > self.ring.end:
+                        req.update(status="failed", error="The live stream ended before the requested end time was buffered.")
+                        write_json_atomic(req_path, req)
+                except (OSError, ValueError, TypeError):
+                    continue
         lat = [x["latency_s"] for x in self.worker.extra]
         summary = {
             "buffered_s": round(self.ring.end, 1),

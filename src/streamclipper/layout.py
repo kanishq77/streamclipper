@@ -118,7 +118,37 @@ def detect_player_and_webcam(video_path: Path, dur: float) -> dict:
                         if r > 85 and g > 40 and b > 20 and (r - g) > 12 and r > b:
                             skin_hits += 1
                 corner_scores[cname] += skin_hits / total_px
-        best_corner = max(corner_scores, key=corner_scores.get)
+        # Face evidence is much more specific than skin-colour pixels in gameplay HUDs.
+        # Require the same corner to contain a plausible face in multiple samples before it
+        # overrides the inexpensive colour heuristic.
+        try:
+            from streamclipper.vision import detect_faces
+
+            face_hits = {k: 0 for k in corners}
+            face_strength = {k: 0.0 for k in corners}
+            faces_by_time = detect_faces(video_path, sample_ts, 1920, 1080)
+            if faces_by_time is not None:
+                for found in faces_by_time:
+                    frame_hits = set()
+                    for box in found or []:
+                        x0, y0, x1, y1 = box
+                        fw, fh = x1 - x0, y1 - y0
+                        if fh < 0.035 or fw < 0.02:
+                            continue
+                        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+                        for name, (ax, ay, bx, by) in corners.items():
+                            if ax <= cx <= bx and ay <= cy <= by:
+                                frame_hits.add(name)
+                                face_strength[name] += min(1.0, fw * fh * 30.0)
+                    for name in frame_hits:
+                        face_hits[name] += 1
+            stable = [name for name, hits in face_hits.items() if hits >= 2]
+            if stable:
+                best_corner = max(stable, key=lambda name: (face_hits[name], face_strength[name]))
+            else:
+                best_corner = max(corner_scores, key=corner_scores.get)
+        except Exception:
+            best_corner = max(corner_scores, key=corner_scores.get)
         webcam_box = corners[best_corner]
     except ToolError:
         raise
