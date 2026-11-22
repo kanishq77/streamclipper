@@ -166,6 +166,17 @@ class LiveRun:
         if self.chat is not None:
             self.chat.stop()
         self.worker.shutdown()
+        # A requested post-roll that never arrived cannot be completed after ingest has ended.
+        req_dir = self.out / "capture_requests"
+        if req_dir.is_dir():
+            for req_path in req_dir.glob("*.json"):
+                try:
+                    req = json.loads(req_path.read_text(encoding="utf-8"))
+                    if req.get("status") == "queued" and float(req.get("end", 0)) > self.ring.end:
+                        req.update(status="failed", error="The live stream ended before the requested end time was buffered.")
+                        write_json_atomic(req_path, req)
+                except (OSError, ValueError, TypeError):
+                    continue
         lat = [x["latency_s"] for x in self.worker.extra]
         summary = {
             "buffered_s": round(self.ring.end, 1),
