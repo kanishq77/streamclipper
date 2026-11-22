@@ -92,8 +92,9 @@ class LiveRun:
         if not req_dir.is_dir():
             return
         for req_path in sorted(req_dir.glob("*.json")):
-            if not re.fullmatch(r"[0-9A-Za-z_-]{1,48}\\.json", req_path.name):
+            if not re.fullmatch(r"[0-9A-Za-z_-]{1,48}\.json", req_path.name):
                 continue
+            req = {}
             try:
                 req = json.loads(req_path.read_text(encoding="utf-8"))
                 if req.get("status") not in ("queued", "running"):
