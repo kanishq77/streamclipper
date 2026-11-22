@@ -1907,7 +1907,7 @@ async function pageLive(root) {
           progressBlock(active),
           h("div", { class: "card stack" },
             h("h3", { text: "Manual live capture" }),
-            h("p", { class: "hint", text: "Capture a time range already buffered by this live session. Times are seconds since capture began; end must already be buffered." }),
+            h("p", { class: "hint", text: "Capture a time range from this session. Times are seconds since capture began; if the end time is ahead of the live buffer, capture waits for it." }),
             h("div", { class: "grid3" },
               field("Start (seconds)", h("input", { type: "number", min: "0", step: "0.1", value: "0", id: "live-cap-start" })),
               field("End (seconds)", h("input", { type: "number", min: "0.1", step: "0.1", value: "30", id: "live-cap-end" }))
